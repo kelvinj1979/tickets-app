@@ -3,17 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestión de Boletos - Fiesta</title>
+  <title>Gestión de Boletos - Fiesta (v1.1.0)</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-6">
   <div class="max-w-4xl mx-auto space-y-6">
     
-    <!-- Encabezado con enlace al escáner -->
+    <!-- Encabezado con versión y enlace al escáner -->
     <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-6 rounded-xl shadow-sm">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800">🎟️ Control de Boletos - Fiesta</h1>
-        <p class="text-sm text-gray-500">Emisión de entradas y control de acceso por QR</p>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold text-gray-800">🎟️ Control de Boletos - Fiesta</h1>
+          <span class="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">v1.1.0</span>
+        </div>
+        <p class="text-sm text-gray-500 mt-1">Emisión de entradas y control de acceso por QR</p>
       </div>
       <a href="/scanner.html" target="_blank" class="w-full sm:w-auto text-center bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium shadow transition">
         Abrir Escáner 📷
@@ -105,7 +108,6 @@
   </div>
 
   <script>
-    // URL base dinámica de la API (hereda automáticamente el dominio y protocolo actual)
     const API_BASE = window.location.origin;
     let currentTicket = null;
     let allTicketsList = [];
@@ -200,13 +202,10 @@
         const data = await res.json();
 
         if (data.success && data.ticket) {
-          showAlert('✅ ¡Boleto generado y guardado exitosamente en la BD!', 'success');
+          showAlert('✅ ¡Boleto generado y guardado exitosamente!', 'success');
           document.getElementById('formTicket').reset();
           
-          // Refrescar lista de tickets
           await loadTickets();
-          
-          // Abrir automáticamente el modal con el boleto generado
           openModal(data.ticket.id);
         } else {
           showAlert('❌ Error: ' + (data.error || 'No se pudo crear el boleto'), 'error');
