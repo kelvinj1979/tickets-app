@@ -86,7 +86,7 @@
         <p><strong>Estado:</strong> <span id="modalStatusBadge"></span></p>
       </div>
 
-      <!-- Botones de Compartir (WhatsApp / Email / Nativo) -->
+      <!-- Botones de Compartir -->
       <div class="space-y-2 pt-2">
         <button onclick="shareWhatsApp()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 shadow">
           <span>📲 Compartir por WhatsApp</span>
@@ -105,13 +105,20 @@
   </div>
 
   <script>
+    // URL base dinámica de la API (hereda automáticamente el dominio y protocolo actual)
+    const API_BASE = window.location.origin;
     let currentTicket = null;
     let allTicketsList = [];
 
     // Cargar la lista de boletos desde la BD
     async function loadTickets() {
       try {
-        const res = await fetch('/api/tickets');
+        const res = await fetch(`${API_BASE}/api/tickets`);
+        
+        if (!res.ok) {
+          throw new Error(`Respuesta del servidor HTTP ${res.status} ${res.statusText}`);
+        }
+
         allTicketsList = await res.json();
         const tbody = document.getElementById('ticketsList');
         document.getElementById('ticketCountBadge').textContent = `${allTicketsList.length} boletos`;
@@ -154,6 +161,14 @@
         });
       } catch (err) {
         console.error('Error al cargar boletos:', err);
+        const tbody = document.getElementById('ticketsList');
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-4 text-center text-red-500 font-medium">
+              ⚠️ ${err.message}. Verifica que el servidor Node.js esté corriendo.
+            </td>
+          </tr>
+        `;
       }
     }
 
@@ -171,11 +186,16 @@
       };
 
       try {
-        const res = await fetch('/api/tickets', {
+        const res = await fetch(`${API_BASE}/api/tickets`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errText || res.statusText}`);
+        }
 
         const data = await res.json();
 
@@ -192,7 +212,8 @@
           showAlert('❌ Error: ' + (data.error || 'No se pudo crear el boleto'), 'error');
         }
       } catch (err) {
-        showAlert('❌ Error de conexión al servidor', 'error');
+        console.error('Error enviando boleto:', err);
+        showAlert('❌ Error de conexión al servidor: ' + err.message, 'error');
       } finally {
         btnSubmit.disabled = false;
         btnSubmit.innerText = 'Generar Boleto con QR';
@@ -268,7 +289,7 @@
       window.location.href = mailtoUrl;
     }
 
-    // Compartir mediante el menú nativo del dispositivo celular
+    // Compartir mediante el menú nativo del celular
     async function shareNative() {
       if (!currentTicket) return;
       const t = currentTicket;
@@ -287,7 +308,6 @@
           console.log('Compartir cancelado o no soportado:', err);
         }
       } else {
-        // Fallback si no es celular o no soporta Web Share API
         shareWhatsApp();
       }
     }
@@ -301,7 +321,7 @@
 
       setTimeout(() => {
         box.classList.add('hidden');
-      }, 4000);
+      }, 5000);
     }
 
     function escapeHtml(str) {

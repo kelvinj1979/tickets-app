@@ -28,6 +28,7 @@
   </div>
 
   <script>
+    const API_BASE = window.location.origin;
     const html5QrCode = new Html5Qrcode("reader");
     const resultBox = document.getElementById("resultBox");
     const resultText = document.getElementById("resultText");
@@ -40,11 +41,17 @@
 
       // Enviar el ID del boleto al backend
       try {
-        const res = await fetch('/api/validate', {
+        const res = await fetch(`${API_BASE}/api/validate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ticketId: decodedText })
         });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errText || res.statusText}`);
+        }
+
         const data = await res.json();
 
         resultBox.classList.remove('hidden', 'bg-emerald-600', 'bg-red-600', 'bg-amber-600');
@@ -66,8 +73,12 @@
         resumeBtn.classList.remove('hidden');
 
       } catch (err) {
-        alert("Error de conexión al validar");
-        restartScanner();
+        console.error('Error al validar boleto:', err);
+        resultBox.classList.remove('hidden', 'bg-emerald-600', 'bg-amber-600');
+        resultBox.classList.add('bg-red-600');
+        resultText.textContent = "❌ Error de Conexión";
+        guestInfo.textContent = err.message;
+        resumeBtn.classList.remove('hidden');
       }
     }
 
