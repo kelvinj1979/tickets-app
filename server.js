@@ -14,6 +14,14 @@ app.use(cors()); // Permite peticiones desde otros orígenes
 app.use(express.json()); // Parsea datos enviados en formato JSON
 app.use(express.static('public')); // Sirve archivos estáticos (index.html, scanner.html)
 
+// Captura global de errores no manejados
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 // =========================================================================
 // 1. ENDPOINT: Crear un nuevo boleto (POST /api/tickets)
 // Recibe: { guest_name, email, quantity }
@@ -34,7 +42,10 @@ app.post('/api/tickets', (req, res) => {
   // Insertar boleto con estado por defecto 'VALID'
   const query = `INSERT INTO tickets (id, guest_name, email, quantity) VALUES (?, ?, ?, ?)`;
   db.run(query, [ticketId, guest_name, email, guestsCount], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error('Error insertando boleto en BD:', err);
+      return res.status(500).json({ error: err.message });
+    }
     
     res.json({
       success: true,
@@ -49,8 +60,11 @@ app.post('/api/tickets', (req, res) => {
 // =========================================================================
 app.get('/api/tickets', (req, res) => {
   db.all(`SELECT * FROM tickets ORDER BY created_at DESC`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    if (err) {
+      console.error('Error consultando boletos en BD:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
   });
 });
 
@@ -116,3 +130,5 @@ app.listen(PORT, () => {
   console.log(`Panel de boletos: http://localhost:${PORT}/index.html`);
   console.log(`Escáner para celular: http://localhost:${PORT}/scanner.html`);
 });
+
+module.exports = app;
