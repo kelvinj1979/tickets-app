@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escáner de Puerta</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librería ligera para escanear QR con la cámara -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body class="bg-slate-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+  <div class="w-full max-w-md bg-slate-800 rounded-2xl p-6 shadow-xl text-center space-y-4">
+    <h1 class="text-xl font-bold">📷 Validación de Entrada</h1>
+    
+    <!-- Contenedor del video de la cámara -->
+    <div id="reader" class="overflow-hidden rounded-xl bg-black"></div>
+
+    <!-- Panel de Resultado -->
+    <div id="resultBox" class="hidden p-4 rounded-xl text-center font-bold text-lg transition-all">
+      <p id="resultText"></p>
+      <p id="guestInfo" class="text-sm font-normal mt-1"></p>
+    </div>
+
+    <button id="resumeBtn" class="hidden w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-bold" onclick="restartScanner()">
+      Escanear Siguiente Boleto
+    </button>
+  </div>
+
+  <script>
+    const html5QrCode = new Html5Qrcode("reader");
+    const resultBox = document.getElementById("resultBox");
+    const resultText = document.getElementById("resultText");
+    const guestInfo = document.getElementById("guestInfo");
+    const resumeBtn = document.getElementById("resumeBtn");
+
+    async function onScanSuccess(decodedText) {
+      // Detener temporalmente la cámara al detectar un código
+      await html5QrCode.stop();
+
+      // Enviar el ID del boleto al backend
+      try {
+        const res = await fetch('/api/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId: decodedText })
+        });
+        const data = await res.json();
+
+        resultBox.classList.remove('hidden', 'bg-emerald-600', 'bg-red-600', 'bg-amber-600');
+
+        if (data.status === 'SUCCESS') {
+          resultBox.classList.add('bg-emerald-600');
+          resultText.textContent = "✅ " + data.message;
+          guestInfo.textContent = `Invitado: ${data.ticket.guest_name} (${data.ticket.quantity} personas)`;
+        } else if (data.status === 'ALREADY_USED') {
+          resultBox.classList.add('bg-amber-600');
+          resultText.textContent = "⚠️ BOLETO YA UTILIZADO";
+          guestInfo.textContent = `${data.ticket.guest_name} - ${data.message}`;
+        } else {
+          resultBox.classList.add('bg-red-600');
+          resultText.textContent = "❌ " + data.message;
+          guestInfo.textContent = `Código leído: ${decodedText}`;
+        }
+
+        resumeBtn.classList.remove('hidden');
+
+      } catch (err) {
+        alert("Error de conexión al validar");
+        restartScanner();
+      }
+    }
+
+    function startScanner() {
+      resultBox.classList.add('hidden');
+      resumeBtn.classList.add('hidden');
+      html5QrCode.start(
+        { facingMode: "environment" }, // Cámara trasera del celular
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess
+      ).catch(err => console.error(err));
+    }
+
+    function restartScanner() {
+      startScanner();
+    }
+
+    // Iniciar escáner al cargar la página
+    startScanner();
+  </script>
+</body>
+</html>
