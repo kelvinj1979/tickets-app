@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Escáner de Puerta</title>
+  <title>Escáner de Puerta (v1.2.0)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Librería ligera para escanear QR con la cámara -->
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -11,7 +11,12 @@
 <body class="bg-slate-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
 
   <div class="w-full max-w-md bg-slate-800 rounded-2xl p-6 shadow-xl text-center space-y-4">
-    <h1 class="text-xl font-bold">📷 Validación de Entrada</h1>
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl font-bold flex items-center gap-2">
+        <span>📷 Validación de Entrada</span>
+      </h1>
+      <span class="bg-emerald-500/20 text-emerald-400 text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-500/30">v1.2.0</span>
+    </div>
     
     <!-- Contenedor del video de la cámara -->
     <div id="reader" class="overflow-hidden rounded-xl bg-black"></div>
@@ -22,8 +27,8 @@
       <p id="guestInfo" class="text-sm font-normal mt-1"></p>
     </div>
 
-    <button id="resumeBtn" class="hidden w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-bold" onclick="restartScanner()">
-      Escanear Siguiente Boleto
+    <button id="resumeBtn" class="hidden w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-bold text-lg shadow-lg transition" onclick="restartScanner()">
+      Escanear Siguiente Boleto 🔄
     </button>
   </div>
 
@@ -34,6 +39,70 @@
     const resultText = document.getElementById("resultText");
     const guestInfo = document.getElementById("guestInfo");
     const resumeBtn = document.getElementById("resumeBtn");
+
+    // Sintetizador de audio en tiempo real usando Web Audio API
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playBeep(type) {
+      try {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        if (type === 'SUCCESS') {
+          // Pitido corto y agudo de éxito (Verde)
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+          osc.frequency.setValueAtTime(1320, audioCtx.currentTime + 0.08); // E6
+          
+          gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+          
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.25);
+        } else if (type === 'ALREADY_USED') {
+          // Tono doble de advertencia (Boleto Ya Usado)
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(587, audioCtx.currentTime);
+          osc.frequency.setValueAtTime(440, audioCtx.currentTime + 0.15);
+          
+          gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+          
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.4);
+        } else {
+          // Dos pitidos graves profundos de error (Rojo / Inválido)
+          [0, 0.18].forEach(offset => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(160, audioCtx.currentTime + offset);
+            
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime + offset);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + offset + 0.14);
+            
+            osc.start(audioCtx.currentTime + offset);
+            osc.stop(audioCtx.currentTime + offset + 0.14);
+          });
+        }
+      } catch (e) {
+        console.error('Audio feedback error:', e);
+      }
+    }
 
     async function onScanSuccess(decodedText) {
       // Detener temporalmente la cámara al detectar un código
@@ -57,14 +126,17 @@
         resultBox.classList.remove('hidden', 'bg-emerald-600', 'bg-red-600', 'bg-amber-600');
 
         if (data.status === 'SUCCESS') {
+          playBeep('SUCCESS');
           resultBox.classList.add('bg-emerald-600');
           resultText.textContent = "✅ " + data.message;
           guestInfo.textContent = `Invitado: ${data.ticket.guest_name} (${data.ticket.quantity} personas)`;
         } else if (data.status === 'ALREADY_USED') {
+          playBeep('ALREADY_USED');
           resultBox.classList.add('bg-amber-600');
           resultText.textContent = "⚠️ BOLETO YA UTILIZADO";
           guestInfo.textContent = `${data.ticket.guest_name} - ${data.message}`;
         } else {
+          playBeep('INVALID');
           resultBox.classList.add('bg-red-600');
           resultText.textContent = "❌ " + data.message;
           guestInfo.textContent = `Código leído: ${decodedText}`;
@@ -74,6 +146,7 @@
 
       } catch (err) {
         console.error('Error al validar boleto:', err);
+        playBeep('INVALID');
         resultBox.classList.remove('hidden', 'bg-emerald-600', 'bg-amber-600');
         resultBox.classList.add('bg-red-600');
         resultText.textContent = "❌ Error de Conexión";
