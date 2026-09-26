@@ -196,7 +196,7 @@ app.get('/api/export/csv', (req, res) => {
 
 // Endpoint de prueba de vida (Healthcheck)
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', version: '1.2.0', time: new Date().toISOString() });
+  res.json({ status: 'OK', version: '1.3.0', time: new Date().toISOString() });
 });
 
 // =========================================================================
@@ -204,7 +204,7 @@ app.get('/api/health', (req, res) => {
 // =========================================================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor v1.2.0 corriendo en puerto ${PORT}`);
+  console.log(`Servidor v1.3.0 corriendo en puerto ${PORT}`);
 });
 
 module.exports = app;
