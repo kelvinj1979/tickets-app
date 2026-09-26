@@ -154,9 +154,51 @@ function validateTicketAtomic(ticketId, callback) {
   }
 }
 
+function insertTicketsBatch(tickets, callback) {
+  if (isSqlite && db) {
+    db.serialize(() => {
+      const stmt = db.prepare(`INSERT INTO tickets (id, guest_name, email, quantity, status) VALUES (?, ?, ?, 1, 'VALID')`);
+      let insertErr = null;
+      tickets.forEach((t) => {
+        if (!insertErr) {
+          stmt.run([t.id, t.guest_name, t.email, 1], (err) => {
+            if (err && !insertErr) insertErr = err;
+          });
+        }
+      });
+      stmt.finalize((err) => {
+        if (err || insertErr) return callback(err || insertErr);
+        callback(null, tickets);
+      });
+    });
+  } else {
+    try {
+      const allTickets = getTicketsJson();
+      const now = new Date().toISOString();
+      tickets.forEach(t => {
+        allTickets.unshift({
+          id: t.id,
+          guest_name: t.guest_name,
+          email: t.email || '',
+          quantity: 1,
+          status: 'VALID',
+          scanned_at: null,
+          created_at: now
+        });
+      });
+      saveTicketsJson(allTickets);
+      callback(null, tickets);
+    } catch (err) {
+      callback(err);
+    }
+  }
+}
+
 module.exports = {
   db,
+  isSqlite,
   insertTicket,
+  insertTicketsBatch,
   fetchAllTickets,
   validateTicketAtomic
 };

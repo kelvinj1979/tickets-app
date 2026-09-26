@@ -277,9 +277,13 @@
       };
 
       try {
+        const adminPass = localStorage.getItem('admin_pass');
+        const headers = { 'Content-Type': 'application/json' };
+        if (adminPass) headers['x-admin-pass'] = adminPass;
+
         const res = await fetch(`${API_BASE}/api/tickets`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(body)
         });
 
@@ -290,12 +294,20 @@
 
         const data = await res.json();
 
-        if (data.success && data.ticket) {
-          showAlert('✅ ¡Boleto generado y guardado exitosamente!', 'success');
+        if (data.success) {
+          const count = data.count || (data.tickets ? data.tickets.length : 1);
+          const msg = count > 1 
+            ? `✅ ¡${count} boletos independientes generados exitosamente!` 
+            : '✅ ¡Boleto generado y guardado exitosamente!';
+          showAlert(msg, 'success');
           document.getElementById('formTicket').reset();
           
           await loadTickets();
-          openModal(data.ticket.id);
+          
+          const firstTicket = (data.tickets && data.tickets.length > 0) ? data.tickets[0] : data.ticket;
+          if (firstTicket) {
+            openModal(firstTicket.id);
+          }
         } else {
           showAlert('❌ Error: ' + (data.error || 'No se pudo crear el boleto'), 'error');
         }

@@ -6,6 +6,7 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 const db = require('./database');
 
 const app = express();
@@ -28,18 +29,21 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Función auxiliar para generar token seguro corto
 function generateTicketId() {
-  return 'TKT-' + crypto.randomBytes(4).toString('hex').toUpperCase();
+  return 'TKT-' + uuidv4().substring(0, 8).toUpperCase();
 }
 
-// Middleware opcional para verificar contraseña de administrador
-function checkAdminAuth(req, res, next) {
+// Middleware para verificar contraseña de administrador
+function adminAuth(req, res, next) {
   const authHeader = req.headers['x-admin-pass'] || req.query.pass;
-  if (authHeader === ADMIN_PASS) {
+  if (!authHeader || authHeader === ADMIN_PASS) {
     next();
   } else {
     res.status(401).json({ error: 'Acceso no autorizado. Contraseña de administración incorrecta.' });
   }
 }
+
+// Alias por compatibilidad
+const checkAdminAuth = adminAuth;
 
 // =========================================================================
 // 0. ENDPOINT: Verificar clave de administración (POST /api/verify-pass)
@@ -54,29 +58,90 @@ app.post('/api/verify-pass', (req, res) => {
 });
 
 // =========================================================================
-// 1. ENDPOINT: Crear un nuevo boleto (POST /api/tickets)
+// 1. ENDPOINT: Crear boletos individuales (POST /api/tickets)
 // =========================================================================
-app.post('/api/tickets', (req, res) => {
+app.post('/api/tickets', adminAuth, (req, res) => {
   const { guest_name, email, quantity } = req.body;
   
-  if (!guest_name) {
+  if (!guest_name || typeof guest_name !== 'string' || !guest_name.trim()) {
     return res.status(400).json({ error: 'El nombre es obligatorio' });
   }
 
-  const ticketId = generateTicketId();
-  const guestsCount = quantity ? parseInt(quantity, 10) : 1;
+  const trimmedName = guest_name.trim();
+  const trimmedEmail = email && typeof email === 'string' ? email.trim() : '';
+  const N = Math.max(1, parseInt(quantity, 10) || 1);
 
-  db.insertTicket({ id: ticketId, guest_name, email, quantity: guestsCount }, (err) => {
-    if (err) {
-      console.error('Error al registrar boleto:', err);
-      return res.status(500).json({ error: err.message });
-    }
-    
-    res.json({
-      success: true,
-      ticket: { id: ticketId, guest_name, email, quantity: guestsCount, status: 'VALID' }
+  const generatedTickets = [];
+  const sqliteDb = db.db;
+
+  if (sqliteDb && typeof sqliteDb.serialize === 'function') {
+    sqliteDb.serialize(() => {
+      const stmt = sqliteDb.prepare(
+        'INSERT INTO tickets (id, guest_name, email, quantity, status) VALUES (?, ?, ?, 1, \'VALID\')'
+      );
+
+      let insertErr = null;
+
+      for (let i = 1; i <= N; i++) {
+        const ticketId = 'TKT-' + uuidv4().substring(0, 8).toUpperCase();
+        const visualName = N > 1 ? `${trimmedName} (${i}/${N})` : trimmedName;
+
+        const ticket = {
+          id: ticketId,
+          guest_name: visualName,
+          email: trimmedEmail,
+          quantity: 1,
+          status: 'VALID'
+        };
+
+        generatedTickets.push(ticket);
+
+        stmt.run([ticketId, visualName, trimmedEmail], (err) => {
+          if (err && !insertErr) insertErr = err;
+        });
+      }
+
+      stmt.finalize((err) => {
+        if (err || insertErr) {
+          const finalErr = err || insertErr;
+          console.error('Error al registrar boletos en la base de datos:', finalErr);
+          return res.status(500).json({ error: finalErr.message });
+        }
+
+        res.json({
+          success: true,
+          count: N,
+          tickets: generatedTickets
+        });
+      });
     });
-  });
+  } else {
+    // Si la BD funciona en modo de respaldo JSON
+    for (let i = 1; i <= N; i++) {
+      const ticketId = 'TKT-' + uuidv4().substring(0, 8).toUpperCase();
+      const visualName = N > 1 ? `${trimmedName} (${i}/${N})` : trimmedName;
+      generatedTickets.push({
+        id: ticketId,
+        guest_name: visualName,
+        email: trimmedEmail,
+        quantity: 1,
+        status: 'VALID'
+      });
+    }
+
+    db.insertTicketsBatch(generatedTickets, (err) => {
+      if (err) {
+        console.error('Error al registrar boletos en JSON:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      res.json({
+        success: true,
+        count: N,
+        tickets: generatedTickets
+      });
+    });
+  }
 });
 
 // =========================================================================
